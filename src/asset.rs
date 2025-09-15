@@ -1,6 +1,7 @@
 use bevy_asset::{Asset, Handle};
 use bevy_color::Color;
 use bevy_reflect::TypePath;
+use bevy_text::Font;
 use bevy_ui::prelude::*;
 
 #[derive(Asset, TypePath)]
@@ -44,7 +45,7 @@ pub struct Node {
 impl Default for Node {
     fn default() -> Self {
         let ui_node = bevy_ui::Node::default();
-        
+
         Self {
             display: Display::Flex,
 
@@ -77,14 +78,27 @@ impl Default for Node {
 }
 
 pub struct Text {
-    text: Vec<TextSpan>,
+    pub text: Vec<TextSpan>,
 }
 
 pub struct TextSpan {
-    text: String,
-    bold: bool,
-    italic: bool,
-    underline: bool,
-    strikethrough: bool,
-    color: Color,
+    pub text: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub strikethrough: bool,
+    pub color: Color,
+}
+
+impl Default for TextSpan {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            bold: false,
+            italic: false,
+            underline: false,
+            strikethrough: false,
+            color: Color::BLACK,
+        }
+    }
 }

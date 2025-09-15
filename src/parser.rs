@@ -2,16 +2,23 @@ use bevy_color::Color;
 use bevy_ui::prelude::*;
 use thiserror::Error;
 
-use crate::asset::Node;
+use crate::asset::{Content, Node, TextSpan};
 
 pub fn parse(input: &str) -> Result<Node, ParseError> {
     let doc = roxmltree::Document::parse(input)?;
-    let Some(uix) = doc.root().first_element_child().filter(|uix| uix.has_tag_name("uix")) else {
+    let Some(uix) = doc
+        .root()
+        .first_element_child()
+        .filter(|uix| uix.has_tag_name("uix"))
+    else {
         return Err(ParseError::InvalidFormat(
             "Missing <uix> root element".to_string(),
         ));
     };
-    let Some(body) = uix.first_element_child().filter(|body| body.has_tag_name("body")) else {
+    let Some(body) = uix
+        .first_element_child()
+        .filter(|body| body.has_tag_name("body"))
+    else {
         return Err(ParseError::InvalidFormat(
             "Missing <body> element".to_string(),
         ));
@@ -29,9 +36,7 @@ fn parse_body<'a>(node: roxmltree::Node<'a, 'a>) -> Result<Node, ParseError> {
     Ok(parse_node(uix_node)?)
 }
 
-fn parse_node<'a>(
-    uix_node: roxmltree::Node<'a, 'a>,
-) -> Result<Node, ParseError> {
+fn parse_node<'a>(uix_node: roxmltree::Node<'a, 'a>) -> Result<Node, ParseError> {
     let mut node = Node::default();
     match uix_node.tag_name().name() {
         "flex" => {
@@ -51,6 +56,15 @@ fn parse_node<'a>(
     }
     parse_common_node_attributes(&uix_node, &mut node)?;
 
+    if let Some(n) = uix_node.first_child()
+        && (n.is_text() || n.tag_name().name() == "t")
+    {
+        let mut spans = Vec::new();
+        parse_text(uix_node.children(), TextSpan::default(), &mut spans)?;
+        node.content = Some(Content::Text(crate::asset::Text { text: spans }));
+        return Ok(node);
+    }
+
     for child in uix_node.children() {
         if child.is_element() {
             node.children.push(parse_node(child)?);
@@ -59,30 +73,94 @@ fn parse_node<'a>(
     Ok(node)
 }
 
+fn parse_text(
+    children: roxmltree::Children<'_, '_>,
+    mut current: TextSpan,
+    spans: &mut Vec<TextSpan>,
+) -> Result<(), ParseError> {
+    for child in children {
+        if child.is_text() {
+            let text = child.text().unwrap_or("");
+            let mut iter = text.trim().chars();
+            let mut was_whitespace = false;
+            for ch in iter {
+                if ch.is_whitespace() {
+                    if was_whitespace {
+                        continue;
+                    }
+                    was_whitespace = true;
+                    current.text.push(' ');
+                } else {
+                    was_whitespace = false;
+                    current.text.push(ch);
+                }
+            }
+            let span = current;
+            current = TextSpan {
+                text: String::new(),
+                ..span
+            };
+            spans.push(span);
+        } else if child.is_element() {
+            if child.tag_name().name() == "t" {
+                let mut new_span = TextSpan {
+                    text: String::new(),
+                    ..current
+                };
+                parse_attribute(&child, "bold", &mut new_span.bold)?;
+                parse_attribute(&child, "italic", &mut new_span.italic)?;
+                parse_attribute(&child, "underline", &mut new_span.underline)?;
+                parse_attribute(&child, "strikethrough", &mut new_span.strikethrough)?;
+                parse_attribute(&child, "color", &mut new_span.color)?;
+                parse_text(child.children(), new_span, spans)?;
+            } else {
+                return Err(ParseError::InvalidFormat(format!(
+                    "Invalid text element: {}",
+                    child.tag_name().name()
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn parse_common_node_attributes<'a>(
-    body_node: &roxmltree::Node<'a, 'a>,
+    uix_node: &roxmltree::Node<'a, 'a>,
     node: &mut Node,
 ) -> Result<(), ParseError> {
-    parse_attribute(body_node, "width", &mut node.width)?;
-    parse_attribute(body_node, "height", &mut node.height)?;
-    parse_attribute(body_node, "min-width", &mut node.min_width)?;
-    parse_attribute(body_node, "min-height", &mut node.min_height)?;
-    parse_attribute(body_node, "max-width", &mut node.max_width)?;
-    parse_attribute(body_node, "max-height", &mut node.max_height)?;
-    parse_attribute(body_node, "margin-top", &mut node.margin.top)?;
-    parse_attribute(body_node, "margin-bottom", &mut node.margin.bottom)?;
-    parse_attribute(body_node, "margin-left", &mut node.margin.left)?;
-    parse_attribute(body_node, "margin-right", &mut node.margin.right)?;
-    parse_attribute(body_node, "padding-top", &mut node.padding.top)?;
-    parse_attribute(body_node, "padding-bottom", &mut node.padding.bottom)?;
-    parse_attribute(body_node, "padding-left", &mut node.padding.left)?;
-    parse_attribute(body_node, "padding-right", &mut node.padding.right)?;
-    parse_attribute(body_node, "background-color", &mut node.background_color)?;
+    parse_attribute(uix_node, "width", &mut node.width)?;
+    parse_attribute(uix_node, "height", &mut node.height)?;
+    parse_attribute(uix_node, "min-width", &mut node.min_width)?;
+    parse_attribute(uix_node, "min-height", &mut node.min_height)?;
+    parse_attribute(uix_node, "max-width", &mut node.max_width)?;
+    parse_attribute(uix_node, "max-height", &mut node.max_height)?;
+    parse_attribute(uix_node, "margin-top", &mut node.margin.top)?;
+    parse_attribute(uix_node, "margin-bottom", &mut node.margin.bottom)?;
+    parse_attribute(uix_node, "margin-left", &mut node.margin.left)?;
+    parse_attribute(uix_node, "margin-right", &mut node.margin.right)?;
+    parse_attribute(uix_node, "padding-top", &mut node.padding.top)?;
+    parse_attribute(uix_node, "padding-bottom", &mut node.padding.bottom)?;
+    parse_attribute(uix_node, "padding-left", &mut node.padding.left)?;
+    parse_attribute(uix_node, "padding-right", &mut node.padding.right)?;
+    parse_attribute(uix_node, "background-color", &mut node.background_color)?;
     Ok(())
 }
 
 trait Converter: Sized {
     fn convert_from(s: &str) -> Result<Self, ParseError>;
+}
+
+impl Converter for bool {
+    fn convert_from(s: &str) -> Result<Self, ParseError> {
+        match s {
+            "true" | "1" => Ok(true),
+            "false" | "0" => Ok(false),
+            _ => Err(ParseError::InvalidFormat(format!(
+                "Invalid boolean value: {}",
+                s
+            ))),
+        }
+    }
 }
 
 impl Converter for FlexDirection {
@@ -227,7 +305,10 @@ impl Converter for Color {
     }
 }
 
-impl<T> Converter for Option<T> where T: Converter {
+impl<T> Converter for Option<T>
+where
+    T: Converter,
+{
     fn convert_from(s: &str) -> Result<Self, ParseError> {
         Ok(Some(T::convert_from(s)?))
     }
