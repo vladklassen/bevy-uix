@@ -26,7 +26,9 @@ impl Plugin for UIXPlugin {
             .init_resource::<UIXRepository>()
             .add_systems(
                 PostUpdate,
-                (handle_added_uix, spawn_uix).chain().before(bevy_ui::UiSystem::Content),
+                (handle_added_uix, spawn_new_uix)
+                    .chain()
+                    .before(bevy_ui::UiSystem::Content),
             );
     }
 }
@@ -54,10 +56,9 @@ fn handle_added_uix(
     }
 }
 
-fn spawn_uix(
+fn spawn_new_uix(
     mut commands: Commands,
     mut repository: ResMut<UIXRepository>,
-    asset_server: Res<AssetServer>,
     uix_assets: Res<Assets<UIX>>,
 ) {
     let mut i = 0;
@@ -71,6 +72,30 @@ fn spawn_uix(
             continue;
         };
         repository.new_uix.swap_remove(i);
-        
+        spawn_uix(&mut commands, &uix.root);
     }
+}
+
+fn spawn_uix(commands: &mut Commands, uix_node: &crate::asset::Node) {
+    let mut node = Node::DEFAULT;
+    node.display = uix_node.display;
+    node.flex_direction = uix_node.flex_direction;
+    node.flex_wrap = uix_node.flex_wrap;
+    node.flex_grow = uix_node.flex_grow;
+    node.flex_shrink = uix_node.flex_shrink;
+    node.flex_basis = uix_node.flex_basis;
+    node.width = uix_node.width;
+    node.height = uix_node.height;
+    node.min_width = uix_node.min_width;
+    node.min_height = uix_node.min_height;
+    node.max_width = uix_node.max_width;
+    node.max_height = uix_node.max_height;
+    node.top = uix_node.top;
+    node.bottom = uix_node.bottom;
+    node.left = uix_node.left;
+    node.right = uix_node.right;
+    node.margin = uix_node.margin;
+    node.padding = uix_node.padding;
+
+    
 }
